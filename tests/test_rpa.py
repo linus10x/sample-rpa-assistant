@@ -48,6 +48,35 @@ class AssistantTests(unittest.TestCase):
         self.assertFalse(result["ok"])
         self.assertIn("unknown op", result["error"])
 
+    def test_failed_action_stops_the_transcript(self):
+        class FailDismiss(Desk):
+            def click(self, button):
+                if button == "dismiss_notice":
+                    raise AppError("notice will not clear")
+                super().click(button)
+
+        result = run(
+            FailDismiss(),
+            "file_intake",
+            {"applicant": "Sample Person", "case_id": "C-1001"},
+        )
+        self.assertFalse(result["submitted"])
+        self.assertEqual(result["steps"], 1)
+        self.assertEqual(len(result["transcript"]), 1)
+        self.assertFalse(result["transcript"][0]["ok"])
+        self.assertEqual(result["transcript"][0]["error"], "notice will not clear")
+        self.assertNotIn("click open_intake", result["log"])
+
+    def test_read_returns_the_typed_field(self):
+        desk = Desk()
+        desk.click("dismiss_notice")
+        desk.click("open_intake")
+        desk.type("applicant", "Sample Person")
+        result = apply_action(desk, {"op": "read", "field": "applicant"})
+        self.assertTrue(result["ok"])
+        self.assertEqual(result["read"], "Sample Person")
+        self.assertEqual(result["observation"]["fields"]["applicant"], "Sample Person")
+
 
 if __name__ == "__main__":
     unittest.main()
